@@ -75,7 +75,7 @@
 
 ## 🚀 Demo Langsung
 
-🔗 **[Coba PerfEngine Pro Sekarang]( https://github.com/squarednalytic/PerfEngine-Pro )**
+🔗 **[Coba PerfEngine Pro Sekarang](https://squarednalytic.github.io/PerfEngine-Pro/)**
 
 Atau jalankan secara lokal:
 
