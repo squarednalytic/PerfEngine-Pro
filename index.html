@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+  <title>⚡ PerfE Graham Bell 2T/4T + Smart CR</title>
+  <!-- Tailwind + Vue + Chart.js -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { transition: background 0.3s ease, color 0.3s ease; }
+    .card { 
+      border-radius: 24px; 
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.02); 
+      backdrop-filter: blur(2px); 
+      transition: transform 0.2s, box-shadow 0.2s; 
+    }
+    .card:active { transform: scale(0.99); }
+    .glass-panel { background: rgba(255,255,255,0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .dark .glass-panel { background: rgba(20,28,40,0.75); backdrop-filter: blur(8px); }
+    .sticky-result { position: sticky; top: 12px; z-index: 20; }
+    .bottom-nav { border-radius: 32px 32px 0 0; box-shadow: 0 -4px 12px rgba(0,0,0,0.05); }
+    .dark .bottom-nav { background: #0f172a; }
+    .oversize-badge { background: #eef2ff; color: #1e40af; }
+    .dark .oversize-badge { background: #1e293b; color: #a5b4fc; }
+    
+    /* FONT SIZE UPDATE: 1x LARGER */
+    body { font-size: 16px; }
+    .text-xs { font-size: 0.875rem; line-height: 1.25rem; }
+    .text-sm { font-size: 1rem; line-height: 1.5rem; }
+    .text-base { font-size: 1.125rem; line-height: 1.75rem; }
+    .text-lg { font-size: 1.25rem; line-height: 1.75rem; }
+    .text-xl { font-size: 1.5rem; line-height: 2rem; }
+    .text-2xl { font-size: 1.875rem; line-height: 2.25rem; }
+    
+    /* Responsive improvements */
+    @media (min-width: 640px) {
+      .max-w-md { max-width: 480px; }
+    }
+    @media (max-width: 360px) {
+      .text-xs { font-size: 0.75rem; }
+      .grid-cols-2 { gap: 0.5rem; }
+    }
+    
+    /* Animation */
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-slide-in { animation: slideIn 0.3s ease-out; }
+    
+    /* Recommendation highlight */
+    .rec-highlight {
+      background: linear-gradient(135deg, #10b98120, #05966920);
+      border-left: 3px solid #10b981;
+    }
+    
+    /* Disabled style untuk diesel */
+    .disabled-option {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 antialiased" :class="{ 'dark': isDark }" id="app">
+
+<div class="max-w-md md:max-w-lg lg:max-w-xl mx-auto px-3 sm:px-4 pb-32 relative min-h-screen">
+
+  <!-- 🌓 Header + Day/Night -->
+  <div class="pt-4 sm:pt-6 pb-2 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <div class="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md">
+        <span class="text-white text-2xl sm:text-3xl">⚙️</span>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-700 to-indigo-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-indigo-300">PerfEngine Pro</h1>
+        <p class="text-sm opacity-70 flex items-center gap-1">Graham Bell · 
+          <span v-if="engineCycle==='2t'" class="text-orange-500 font-medium">⚡2-Tak</span>
+          <span v-else class="text-blue-500 font-medium">🔵4-Tak</span>
+          <span v-if="fuelType==='diesel'" class="text-amber-500 font-medium ml-1">🛢️Diesel</span>
+        </p>
+      </div>
+    </div>
+    <button @click="toggleDarkMode" class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/60 dark:bg-gray-800 shadow backdrop-blur flex items-center justify-center text-xl sm:text-2xl transition-all hover:scale-105">
+      {{ isDark ? '☀️' : '🌙' }}
+    </button>
+  </div>
+
+  <!-- 🧩 PRESET SELECTOR (LENGKAP SEMUA CC MOTOR INDONESIA) -->
+  <div class="mt-4 animate-slide-in" :class="{ 'disabled-option': fuelType === 'diesel' }">
+    <label class="text-sm font-semibold uppercase tracking-wider opacity-70">
+      🏍️ PRESET LENGKAP MOTOR INDONESIA 
+      <span v-if="fuelType==='diesel'" class="text-red-500 text-xs ml-2">(Disabled - Diesel Mode)</span>
+    </label>
+    <div class="flex gap-2 mt-1">
+      <select v-model="selectedPreset" @change="applyPreset" 
+              :disabled="fuelType === 'diesel'"
+              class="w-full p-3 sm:p-3.5 rounded-2xl border-0 bg-white/70 dark:bg-gray-800 shadow-sm text-base font-medium transition"
+              :class="{ 'opacity-50 cursor-not-allowed': fuelType === 'diesel' }">
+        <option value="">-- custom / manual --</option>
+        <option value="standard_zero">🔄 Standard Zero (Referensi)</option>
+        
+        <optgroup label="🏍️ BEBEK & UNDERBONE (CR 9.0-10.0)">
+          <option value="supra_x_125">Supra X 125 (bore 52.4, stroke 57.9, CR 9.3)</option>
+          <option value="jupiter_z">Jupiter Z (bore 51, stroke 54, CR 9.3)</option>
+          <option value="shogun_125">Shogun 125 (bore 53.5, stroke 55.2, CR 9.6)</option>
+        </optgroup>
+        
+        <optgroup label="🏍️ MATIC ENTRY (CR 9.2-10.5)">
+          <option value="beat_mio">Honda BeAT / Yamaha Mio (bore 50, stroke 55.1, CR 9.5)</option>
+          <option value="scoopy">Scoopy 110 (bore 50, stroke 55.6, CR 9.5)</option>
+          <option value="vario_110">Vario 110 eSP (bore 50, stroke 55.1, CR 9.5)</option>
+          <option value="nex_115">Suzuki Nex 115 (bore 51, stroke 55.2, CR 9.4)</option>
+        </optgroup>
+        
+        <optgroup label="🏍️ MATIC & SPORT 125-150cc (CR 10.6-12.0)">
+          <option value="vario_125">Vario 125 eSP (bore 52.4, stroke 57.9, CR 11.0)</option>
+          <option value="vario_150">Vario 150 eSP (bore 57.3, stroke 57.8, CR 11.0)</option>
+          <option value="pcx_150">PCX 150 (bore 57.3, stroke 57.9, CR 10.6)</option>
+          <option value="nmax_155">Yamaha NMAX 155 (bore 58, stroke 58.7, CR 11.6)</option>
+          <option value="aerox_155">Yamaha Aerox 155 (bore 58, stroke 58.7, CR 11.6)</option>
+          <option value="cb150r">CB150R Streetfire (bore 57.3, stroke 57.8, CR 11.3)</option>
+          <option value="r15_v4">Yamaha R15 V4 (bore 58, stroke 58.7, CR 11.6)</option>
+          <option value="gsx_r150">Suzuki GSX-R150 (bore 62, stroke 48.8, CR 11.5)</option>
+        </optgroup>
+        
+        <optgroup label="🏍️ MOTOR NAKED & SPORT 155-250cc (CR >11.5)">
+          <option value="mt15">Yamaha MT-15 (bore 58, stroke 58.7, CR 11.6)</option>
+          <option value="cbr150r">CBR150R (bore 57.3, stroke 57.8, CR 11.3)</option>
+          <option value="cb150x">CB150X (bore 57.3, stroke 57.8, CR 11.3)</option>
+          <option value="cbr250rr">CBR250RR (bore 62, stroke 41.4, 2cyl, CR 12.5)</option>
+          <option value="ninja_250">Kawasaki Ninja 250 (bore 62, stroke 41.2, 2cyl, CR 11.3)</option>
+          <option value="z250">Kawasaki Z250 (bore 62, stroke 41.2, 2cyl, CR 11.3)</option>
+        </optgroup>
+        
+        <optgroup label="🏍️ Moge & TOURING 250cc+ (CR 10-13)">
+          <option value="mt25">Yamaha MT-25 (bore 60, stroke 44.1, 2cyl, CR 11.6)</option>
+          <option value="versys_250">Kawasaki Versys-X 250 (bore 70, stroke 64.9, 2cyl, CR 11.3)</option>
+          <option value="crf250l">CRF250L (bore 76, stroke 55, 1cyl, CR 10.7)</option>
+          <option value="klx250">Kawasaki KLX250 (bore 72, stroke 61.2, 1cyl, CR 11.0)</option>
+        </optgroup>
+        
+        <optgroup label="🚗 Mobil LCGC/MPV (CR 10-11.5)">
+          <option value="avanza">Avanza 1.5 (bore 72.5, stroke 90.6, 4cyl, CR 11.5)</option>
+          <option value="brio">Brio 1.2 (bore 73, stroke 71.6, 4cyl, CR 10.6)</option>
+        </optgroup>
+        <optgroup label="🚗 Mobil Turbo/Performa">
+          <option value="turbo_car">1.5 Turbo (bore 73, stroke 89.4, 4cyl, CR 10.5)</option>
+        </optgroup>
+        
+        <!-- DIESEL PRESETS (hanya muncul jika fuel type diesel) -->
+        <optgroup v-if="fuelType === 'diesel'" label="🛢️ DIESEL ENGINES">
+          <option value="diesel_4jb1">Isuzu 4JB1 2.8L (bore 93, stroke 102, 4cyl, CR 18.5)</option>
+          <option value="diesel_4d56">Mitsubishi 4D56 2.5L (bore 91.1, stroke 95, 4cyl, CR 21.0)</option>
+          <option value="diesel_1kd">Toyota 1KD 3.0L (bore 96, stroke 103, 4cyl, CR 17.9)</option>
+        </optgroup>
+      </select>
+    </div>
+  </div>
+
+  <!-- ⚙️ ENGINE FORM -->
+  <div class="mt-5 sm:mt-6 card bg-white/70 dark:bg-gray-800/80 p-4 sm:p-5 glass-panel">
+    <div class="flex justify-between items-center mb-3">
+      <h2 class="font-bold text-lg sm:text-xl flex items-center gap-2"><span>🔧 Setup</span></h2>
+      <div class="flex gap-1 text-sm sm:text-base bg-gray-100 dark:bg-gray-700 p-1 rounded-xl">
+        <button @click="setEngineType('motorcycle')" 
+                :class="engineType==='motorcycle'?'bg-blue-500 text-white shadow':'text-gray-600 dark:text-gray-300'"
+                :disabled="fuelType === 'diesel'"
+                class="px-3 sm:px-4 py-1.5 rounded-xl transition"
+                :class="{ 'opacity-50 cursor-not-allowed': fuelType === 'diesel' }">
+          🏍️ Motor
+        </button>
+        <button @click="setEngineType('car')" 
+                :class="engineType==='car'?'bg-blue-500 text-white shadow':'text-gray-600 dark:text-gray-300'"
+                class="px-3 sm:px-4 py-1.5 rounded-xl transition">
+          🚗 Mobil
+        </button>
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 text-sm sm:text-base">
+      <div><label class="block text-sm opacity-70">Fuel</label>
+        <select v-model="fuelType" @change="onFuelTypeChange" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base">
+          <option value="gasoline">⛽ Gasoline</option>
+          <option value="diesel">🛢️ Diesel</option>
+        </select>
+      </div>
+      <div><label class="block text-sm opacity-70">Engine cycle</label>
+        <select v-model="engineCycle" 
+                :disabled="fuelType === 'diesel'"
+                class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"
+                :class="{ 'opacity-50 cursor-not-allowed': fuelType === 'diesel' }">
+          <option value="4t">🔵 4-Tak</option>
+          <option value="2t" :disabled="fuelType === 'diesel'">⚡ 2-Tak</option>
+        </select>
+      </div>
+      <div><label class="block text-sm opacity-70">Mode</label>
+        <select v-model="induction" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base">
+          <option value="NA">🌬️ NA</option>
+          <option value="Turbo">🚀 Turbo</option>
+        </select>
+      </div>
+      <div><label class="block text-sm opacity-70">Cylinders</label> <input type="number" min="1" v-model.number="cylCount" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Bore (mm) std</label> <input type="number" step="0.01" v-model.number="baseBore" @input="syncBoreFromBase" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Stroke (mm)</label> <input type="number" step="0.01" v-model.number="stroke" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Chamber (cc)</label> <input type="number" step="0.1" v-model.number="chamberCC" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Gasket thick</label> <input type="number" step="0.01" v-model.number="gasketThick" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Gasket bore</label> <input type="number" step="0.1" v-model.number="gasketBore" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">Dome/Dish (cc)</label> <input type="number" step="0.1" v-model.number="pistonVolume" class="w-full p-2.5 sm:p-3 rounded-xl bg-gray-100/50 dark:bg-gray-900 border-0 text-sm sm:text-base"></div>
+    </div>
+
+    <!-- VALVE IN / OUT + Gear + Timing -->
+    <div class="grid grid-cols-2 gap-3 sm:gap-4 mt-4">
+      <div><label class="block text-sm opacity-70">🔵 Klep IN (mm)</label> <input type="number" step="0.1" v-model.number="valveIn" class="w-full p-2.5 sm:p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">🔴 Klep OUT (mm)</label> <input type="number" step="0.1" v-model.number="valveOut" class="w-full p-2.5 sm:p-3 rounded-xl bg-red-50/50 dark:bg-red-950/20 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">⚙️ Gear Ratio</label> <input type="number" step="0.01" v-model.number="gearRatio" class="w-full p-2.5 sm:p-3 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 text-sm sm:text-base"></div>
+      <div><label class="block text-sm opacity-70">⏱️ Ignition (°BTDC)</label> <input type="number" step="0.5" v-model.number="ignitionTiming" class="w-full p-2.5 sm:p-3 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 text-sm sm:text-base"></div>
+    </div>
+
+    <!-- OVERSIZE DROPDOWN -->
+    <div class="mt-5">
+      <label class="text-sm font-semibold">🔩 OVERSIZE PISTON </label>
+      <select v-model="oversize" @change="applyOversize" class="w-full mt-1 p-2.5 sm:p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 font-medium text-base">
+        <option :value="0">Standard (0)</option>
+        <option :value="0.5">+0.50 mm</option>
+        <option :value="0.85">+0.85 mm</option>
+        <option :value="1.00">+1.00 mm</option>
+      </select>
+      <div class="flex flex-wrap gap-2 mt-2 text-sm">
+        <span class="oversize-badge px-3 py-1 rounded-full">📏 Bore std: {{ baseBore.toFixed(2) }} mm</span>
+        <span class="oversize-badge px-3 py-1 rounded-full bg-indigo-200 dark:bg-indigo-900">⚡ Oversize: {{ effectiveBore.toFixed(2) }} mm</span>
+      </div>
+    </div>
+    <div v-if="induction==='Turbo'" class="mt-4">
+      <label class="text-sm">💨 Boost pressure (psi)</label>
+      <input type="number" step="0.1" v-model.number="boostPsi" class="w-full p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 text-base">
+    </div>
+    
+    <!-- Diesel info banner -->
+    <div v-if="fuelType === 'diesel'" class="mt-4 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-xl border border-amber-200 dark:border-amber-800">
+      <p class="text-sm font-medium text-amber-800 dark:text-amber-300">🛢️ DIESEL MODE AKTIF</p>
+      <p class="text-xs text-amber-700 dark:text-amber-400 mt-1">
+        • Motor preset dinonaktifkan (diesel umumnya untuk mobil/truk)<br>
+        • Engine cycle dikunci ke 4-Tak<br>
+        • Target CR optimal: 16:1 - 22:1<br>
+        • AFR suggestion: 18:1 - 25:1 (lean burn)
+      </p>
+    </div>
+  </div>
+
+  <!-- 🧮 STICKY RESULT PANEL with CR recommendation button -->
+  <div class="sticky-result">
+    <div class="card bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-900 p-5 sm:p-6 border border-white/30">
+      <div class="flex justify-between items-center flex-wrap gap-2">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-xl sm:text-2xl">⚡ CR: {{ compressionRatio.toFixed(2) }}:1</span>
+          <span :class="crSafety.class" class="px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-sm font-bold">{{ crSafety.label }}</span>
+        </div>
+        <button v-if="showCRRecommendation" @click="applyCRRecommendation" 
+                class="text-sm bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full transition flex items-center gap-1">
+          💡 Fix to {{ targetCR }}
+        </button>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mt-4 text-center">
+        <div><span class="text-sm opacity-70">Swept</span><br><span class="font-bold text-base sm:text-lg">{{ sweptVolume.toFixed(1) }} cc</span></div>
+        <div><span class="text-sm opacity-70">Clearance</span><br><span class="font-bold text-base sm:text-lg">{{ clearanceVolume.toFixed(2) }} cc</span></div>
+        <div><span class="text-sm opacity-70">Est. HP</span><br><span class="font-bold text-base sm:text-lg">{{ estimatedHP.toFixed(1) }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 📊 AFR + OCTANE + recommendation (DIGABUNGKAN DENGAN AI INSIGHT) -->
+  <div class="grid grid-cols-2 gap-4 mt-5">
+    <div class="card bg-white/70 dark:bg-gray-800 p-4 sm:p-5">
+      <div class="text-sm opacity-70">🔥 AFR SUGGESTION</div>
+      <div class="text-xl sm:text-2xl font-mono font-bold">{{ afrRecommendation.value }}</div>
+      <div class="text-sm flex items-center gap-1"><span :class="afrIndicator.class">{{ afrIndicator.label }}</span></div>
+    </div>
+    <div class="card bg-white/70 dark:bg-gray-800 p-4 sm:p-5">
+      <div class="text-sm opacity-70">{{ fuelType === 'diesel' ? '🛢️ CETANE' : '⛽ OCTANE (RON)' }}</div>
+      <div class="text-xl sm:text-2xl font-bold">{{ fuelType === 'diesel' ? cetaneRecommendation : octaneRecommendation.ron }}</div>
+      <div v-if="octaneRecommendation.warning && fuelType !== 'diesel'" class="text-sm text-orange-600 dark:text-orange-400">⚠️ {{ octaneRecommendation.warning }}</div>
+      <div v-if="fuelType === 'diesel'" class="text-sm text-amber-600 dark:text-amber-400">CN 48-55 recommended</div>
+    </div>
+  </div>
+
+  <!-- 🧠 SMART INSIGHT (AI INSIGHT + OCTANE) -->
+  <div class="card bg-white/70 dark:bg-gray-800 p-4 sm:p-5 mt-4" :class="{ 'rec-highlight': showCRRecommendation }">
+    <div class="flex items-center gap-2"><span class="text-lg">🧠 AI Insight</span><span class="text-sm bg-blue-100 dark:bg-blue-900 px-3 py-1 rounded-full"> + {{ fuelType === 'diesel' ? 'Cetane' : 'Octane' }}</span></div>
+    <p class="text-base sm:text-lg mt-3 font-medium">{{ smartInsight }}</p>
+    <div v-if="crRecommendationText" class="text-sm mt-3 p-3 bg-green-50 dark:bg-green-950/30 rounded-xl">
+      💡 {{ crRecommendationText }}
+    </div>
+    <div class="text-sm mt-3 border-t pt-3 border-gray-200 dark:border-gray-700 flex flex-wrap gap-x-4 gap-y-2">
+      <span v-if="oversizeEffect">📈 Oversize +{{ oversize }}mm → +{{ oversizeEffect.deltaCR }} CR, +{{ oversizeEffect.deltaHP }} HP</span>
+      <span>⚙️ Gear {{ gearRatio }}:1</span>
+      <span>🔵 IN {{ valveIn }}mm / 🔴 OUT {{ valveOut }}mm</span>
+      <span>⏱️ {{ ignitionTiming }}°</span>
+    </div>
+  </div>
+
+  <!-- 📈 CHARTS HP -->
+  <div class="mt-5 card bg-white/80 dark:bg-gray-800 p-4">
+    <div class="flex justify-between flex-wrap gap-1">
+      <span class="font-semibold text-base sm:text-lg">📉 HP vs RPM ({{ engineCycle.toUpperCase() }})</span>
+      <span class="text-sm opacity-60">VE NA:{{ veNA }}% Turbo:{{ veTurbo }}%</span>
+    </div>
+    <canvas id="hpChart" class="w-full mt-2" style="height:160px; max-height:180px;"></canvas>
+    <div class="flex text-sm justify-around mt-2">
+      <span>🔵 NA peak: {{ naPeakHP.toFixed(1) }}</span>
+      <span class="text-purple-600 dark:text-purple-300">🚀 Turbo peak: {{ turboPeakHP.toFixed(1) }}</span>
+    </div>
+  </div>
+
+  <!-- 🧩 BOTTOM NAV -->
+  <div class="fixed bottom-0 left-0 right-0 max-w-md md:max-w-lg lg:max-w-xl mx-auto bottom-nav bg-white/80 dark:bg-gray-800/90 backdrop-blur-xl px-5 sm:px-6 py-3 flex justify-around items-center border-t border-gray-200/50 transition-all">
+    <button @click="saveToStorage" class="flex flex-col items-center text-sm hover:scale-105 transition"><span>💾</span>Save</button>
+    <button @click="exportJSON" class="flex flex-col items-center text-sm hover:scale-105"><span>📄</span>JSON</button>
+    <button @click="toggleUnit" class="flex flex-col items-center text-sm hover:scale-105"><span>{{ unit === 'mm' ? '📏' : '📐' }}</span>{{ unit }}</button>
+    <button @click="resetToDefault" class="flex flex-col items-center text-sm hover:scale-105"><span>🔄</span>Reset</button>
+    <button @click="toggleDarkMode" class="flex flex-col items-center text-sm hover:scale-105"><span>{{ isDark?'☀️':'🌙' }}</span>Mode</button>
+  </div>
+</div>
+
+<script>
+  const { createApp, ref, computed, watch, onMounted, nextTick } = Vue;
+
+  const app = createApp({
+    setup() {
+      // --- state ---
+      const isDark = ref(false);
+      const engineType = ref('motorcycle');
+      const fuelType = ref('gasoline');
+      const engineCycle = ref('4t');   
+      const induction = ref('NA');
+      
+      const baseBore = ref(50.0);
+      const effectiveBore = ref(50.0);
+      const stroke = ref(55.1);
+      const cylCount = ref(1);
+      const chamberCC = ref(12.0);
+      const gasketThick = ref(1.0);
+      const gasketBore = ref(51.0);
+      const pistonVolume = ref(-1.5);
+      const oversize = ref(0);
+      const boostPsi = ref(10);
+      const selectedPreset = ref('beat_mio');
+      const unit = ref('mm');
+      
+      const valveIn = ref(25.0);
+      const valveOut = ref(22.0);
+      const gearRatio = ref(3.2);
+      const ignitionTiming = ref(12.0);
+
+      const rpmPoints = [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000];
+      let chartInstance = null;
+
+      // --- sync bore ---
+      const syncBoreFromBase = () => { effectiveBore.value = baseBore.value + oversize.value; };
+      const applyOversize = () => { effectiveBore.value = baseBore.value + oversize.value; };
+      
+      // --- Fungsi untuk diesel: disable motor ---
+      const setEngineType = (type) => {
+        if (fuelType.value === 'diesel' && type === 'motorcycle') {
+          // Jangan izinkan motor jika diesel
+          return;
+        }
+        engineType.value = type;
+      };
+      
+      // --- Handler ketika fuel type berubah ---
+      const onFuelTypeChange = () => {
+        if (fuelType.value === 'diesel') {
+          // Diesel mode: force 4-tak, force mobil, set CR lebih tinggi
+          engineCycle.value = '4t';
+          engineType.value = 'car';
+          induction.value = 'NA';
+          selectedPreset.value = '';
+          
+          // Set default diesel values jika belum ada
+          if (baseBore.value < 70) {
+            baseBore.value = 93.0;
+            stroke.value = 102.0;
+            cylCount.value = 4;
+            chamberCC.value = 35.0;
+            pistonVolume.value = 5.0; // Dish piston untuk diesel
+          }
+          
+          // Adjust untuk diesel
+          if (compressionRatio.value < 14) {
+            chamberCC.value = sweptPerCyl.value / 17; // Target CR ~18
+          }
+          
+          effectiveBore.value = baseBore.value + oversize.value;
+          
+          // Sesuaikan valve untuk diesel (biasanya lebih kecil relatif)
+          valveIn.value = baseBore.value * 0.35;
+          valveOut.value = baseBore.value * 0.32;
+        } else {
+          // Gasoline mode: reset ke default gasoline jika diperlukan
+          engineType.value = 'motorcycle';
+        }
+      };
+
+      // --- computed ---
+      const sweptPerCyl = computed(() => (Math.PI / 4) * Math.pow(effectiveBore.value, 2) * stroke.value / 1000);
+      const sweptVolume = computed(() => sweptPerCyl.value * cylCount.value);
+      const gasketVolume = computed(() => (Math.PI / 4) * Math.pow(gasketBore.value, 2) * gasketThick.value / 1000);
+      const clearanceVolume = computed(() => chamberCC.value + gasketVolume.value - pistonVolume.value);
+      const compressionRatio = computed(() => {
+        const Vs = sweptPerCyl.value;
+        const Vc = clearanceVolume.value;
+        return Vc > 0 ? (Vs + Vc) / Vc : 10;
+      });
+
+      // CR safety & recommendation
+      const targetCR = computed(() => {
+        if (fuelType.value === 'gasoline') return 10.5;
+        return 18.0; // Diesel target
+      });
+      
+      const showCRRecommendation = computed(() => {
+        const cr = compressionRatio.value;
+        if (fuelType.value === 'gasoline') return cr < 9.0;
+        return cr < 14.0; // Diesel warning if too low
+      });
+
+      const crRecommendationText = computed(() => {
+        if (!showCRRecommendation.value) return '';
+        const currentCR = compressionRatio.value.toFixed(2);
+        const target = targetCR.value;
+        if (fuelType.value === 'gasoline') {
+          return `CR ${currentCR} terlalu rendah. Rekomendasi: tingkatkan ke ${target} (Pertamax) dengan memperkecil chamber atau menambah dome piston.`;
+        } else {
+          return `CR ${currentCR} terlalu rendah untuk diesel. Rekomendasi: tingkatkan ke ${target} untuk efisiensi optimal. Diesel membutuhkan CR tinggi (16-22) untuk kompresi ignition.`;
+        }
+      });
+
+      const applyCRRecommendation = () => {
+        const target = targetCR.value;
+        const Vs = sweptPerCyl.value;
+        const idealVc = Vs / (target - 1);
+        const currentVc = clearanceVolume.value;
+        const delta = idealVc - currentVc;
+        chamberCC.value = Math.max(fuelType.value === 'diesel' ? 20 : 5, chamberCC.value + delta);
+        if (chamberCC.value < 5) chamberCC.value = 5;
+      };
+
+      const crSafety = computed(() => {
+        const cr = compressionRatio.value;
+        if (fuelType.value === 'gasoline') {
+          if (cr < 9.0) return { label: '⚠️ Too low', class: 'bg-yellow-200 text-yellow-800' };
+          if (cr > 13.0) return { label: '🔥 Knocking risk', class: 'bg-red-200 text-red-800' };
+          if (cr >= 11.5) return { label: '⚡ High Perf', class: 'bg-orange-200 text-orange-800' };
+          if (cr >= 10.6) return { label: '✅ Sport', class: 'bg-green-200 text-green-800' };
+          return { label: '✅ Harian', class: 'bg-green-200 text-green-800' };
+        } else {
+          if (cr < 14) return { label: '⚠️ Low (Diesel)', class: 'bg-yellow-200 text-yellow-800' };
+          if (cr > 25) return { label: '🔥 Over', class: 'bg-red-200 text-red-800' };
+          if (cr >= 16 && cr <= 22) return { label: '✅ Diesel Optimal', class: 'bg-green-200 text-green-800' };
+          return { label: '✅ Diesel safe', class: 'bg-green-200 text-green-800' };
+        }
+      });
+
+      const afrRecommendation = computed(() => {
+        if (fuelType.value === 'gasoline') return { value: induction.value==='Turbo' ? '12.5 – 13.2' : '12.8 – 14.7' };
+        else return { value: '18 – 25 (lean burn)' };
+      });
+      
+      const afrIndicator = computed(() => {
+        if (fuelType.value==='gasoline' && compressionRatio.value>12) return { label:'⚠️ Rich safe', class:'text-orange-600' };
+        if (fuelType.value==='diesel') return { label:'💨 Lean burn', class:'text-amber-600' };
+        return { label:'Ideal', class:'text-green-600' };
+      });
+      
+      const octaneRecommendation = computed(() => {
+        const cr = compressionRatio.value;
+        let ron = 'RON 90'; let warning = '';
+        if (cr < 9.5) ron = 'RON 90 (Pertalite)';
+        else if (cr < 10.6) ron = 'RON 92 (Pertamax)';
+        else if (cr < 11.5) ron = 'RON 95 (Pertamax Turbo)';
+        else ron = 'RON 98+ (Pertamax Turbo)';
+        if (fuelType.value==='gasoline' && cr>12.5) warning = 'Knocking risk, upgrade fuel';
+        return { ron, warning };
+      });
+      
+      const cetaneRecommendation = computed(() => {
+        const cr = compressionRatio.value;
+        if (cr >= 18) return 'CN 50-55 (Dexlite/Pertadex)';
+        if (cr >= 16) return 'CN 48-52 (Solar biasa)';
+        return 'CN 45+ (Solar)';
+      });
+
+      const veNA = computed(() => {
+        let base = engineCycle.value === '2t' ? 80 : 85;
+        if (compressionRatio.value>11) base += 5;
+        if (fuelType.value === 'diesel') base += 3; // Diesel typically higher VE
+        return Math.min(95, base);
+      });
+      const veTurbo = computed(() => 120 + (boostPsi.value*0.5));
+      const displacementCC = computed(() => sweptVolume.value);
+      
+      const estimatedHP = computed(() => {
+        const disp = displacementCC.value;
+        const rpm = fuelType.value === 'diesel' ? 3500 : 6000; // Diesel peak at lower RPM
+        let ve = induction.value==='Turbo' ? veTurbo.value/100 : veNA.value/100;
+        const cycleFactor = engineCycle.value === '2t' ? 1.05 : 1.0;
+        const dieselFactor = fuelType.value === 'diesel' ? 0.85 : 1.0; // Diesel slightly lower specific output
+        return (disp * rpm * ve) / 5252 * 0.9 * cycleFactor * dieselFactor;
+      });
+      
+      const naPeakHP = computed(() => {
+        const rpm = fuelType.value === 'diesel' ? 4000 : 6500;
+        return (displacementCC.value * rpm * (veNA.value/100)) / 5252 * 0.9 * (fuelType.value === 'diesel' ? 0.85 : 1.0);
+      });
+      const turboPeakHP = computed(() => {
+        const rpm = fuelType.value === 'diesel' ? 3800 : 6500;
+        return (displacementCC.value * rpm * (veTurbo.value/100)) / 5252 * 0.95 * (fuelType.value === 'diesel' ? 0.85 : 1.0);
+      });
+
+      const oversizeEffect = computed(() => {
+        if (oversize.value===0) return null;
+        const stdBore = baseBore.value;
+        const stdSwept = (Math.PI/4)*stdBore*stdBore*stroke.value/1000*cylCount.value;
+        const stdCR = ( (stdSwept/cylCount.value) + clearanceVolume.value ) / clearanceVolume.value;
+        const deltaCR = (compressionRatio.value - stdCR).toFixed(2);
+        const deltaHP = (estimatedHP.value - (stdSwept*6000*(veNA.value/100)/5252*0.9)).toFixed(1);
+        return { deltaCR, deltaHP };
+      });
+
+      // AI INSIGHT DISAMAKAN DENGAN OCTANE/CETANE
+      const smartInsight = computed(() => {
+        const cr = compressionRatio.value;
+        let msg = '';
+        
+        if (fuelType.value === 'gasoline') {
+          const ron = octaneRecommendation.value.ron;
+          msg = `[OCTANE: ${ron}] `;
+          
+          if (cr >= 12.5) msg += 'CR sangat tinggi, wajib RON 98+. ';
+          else if (cr >= 11.5) msg += 'CR tinggi, gunakan RON 95-98. ';
+          else if (cr >= 10.6) msg += 'CR menengah, ideal RON 92-95. ';
+          else if (cr >= 9.0) msg += 'CR harian, RON 90 cukup. ';
+          else msg += 'CR rendah, upgrade fuel tidak perlu. ';
+        } else {
+          msg = `[DIESEL - ${cetaneRecommendation.value}] `;
+          
+          if (cr >= 20) msg += 'CR tinggi ideal untuk diesel modern. ';
+          else if (cr >= 17) msg += 'CR baik untuk diesel common rail. ';
+          else if (cr >= 15) msg += 'CR cukup untuk diesel indirect injection. ';
+          else msg += 'CR terlalu rendah untuk diesel, sulit self-ignition. ';
+          
+          msg += 'Diesel membutuhkan kompresi tinggi untuk pembakaran spontan. ';
+        }
+
+        if (engineCycle.value==='2t') msg += '2-Tak: campuran oli tepat. ';
+        if (gearRatio.value > 4) msg += 'Gir pendek, akselerasi kuat. ';
+        if (valveIn.value > 35) msg += 'Klep IN besar. ';
+        if (ignitionTiming.value > 20 && fuelType.value !== 'diesel') msg += 'Timing maju, waspada knocking. ';
+        if (fuelType.value === 'diesel' && ignitionTiming.value > 15) msg += 'Injection timing perlu disesuaikan. ';
+        if (showCRRecommendation.value) msg += 'CR perlu ditingkatkan. ';
+        
+        // Tambahan insight
+        if (fuelType.value === 'diesel') {
+          if (induction.value === 'Turbo') msg += 'Turbo diesel sangat efisien. ';
+          else msg += 'Pertimbangkan turbo untuk diesel. ';
+        } else {
+          if (octaneRecommendation.value.warning) msg += `⚠️ ${octaneRecommendation.value.warning}. `;
+        }
+        
+        return msg || 'Setup seimbang, siap performa.';
+      });
+
+      const applyPreset = () => {
+        // Jika diesel mode, hanya allow diesel presets
+        if (fuelType.value === 'diesel') {
+          const preset = selectedPreset.value;
+          if (preset === 'diesel_4jb1') {
+            baseBore.value = 93.0; stroke.value = 102.0; cylCount.value = 4;
+            chamberCC.value = 35.0; pistonVolume.value = 5.0;
+            engineCycle.value = '4t'; engineType.value = 'car';
+          } else if (preset === 'diesel_4d56') {
+            baseBore.value = 91.1; stroke.value = 95.0; cylCount.value = 4;
+            chamberCC.value = 30.0; pistonVolume.value = 4.0;
+            engineCycle.value = '4t'; engineType.value = 'car';
+          } else if (preset === 'diesel_1kd') {
+            baseBore.value = 96.0; stroke.value = 103.0; cylCount.value = 4;
+            chamberCC.value = 38.0; pistonVolume.value = 6.0;
+            engineCycle.value = '4t'; engineType.value = 'car';
+          }
+          oversize.value = 0;
+          effectiveBore.value = baseBore.value;
+          return;
+        }
+        
+        const preset = selectedPreset.value;
+        if (preset === 'standard_zero') {
+          baseBore.value = 0; stroke.value = 0; cylCount.value = 1; chamberCC.value = 0; oversize.value = 0;
+          valveIn.value = 0; valveOut.value = 0; gearRatio.value = 1; ignitionTiming.value = 0;
+          effectiveBore.value = 0;
+          return;
+        }
+        
+        // BEBEK & UNDERBONE
+        if (preset === 'supra_x_125') { baseBore.value=52.4; stroke.value=57.9; cylCount.value=1; chamberCC.value=12.0; pistonVolume.value=-1.5; engineCycle.value='4t'; engineType.value='motorcycle'; }
+        else if (preset === 'jupiter_z') { baseBore.value=51.0; stroke.value=54.0; cylCount.value=1; chamberCC.value=11.5; pistonVolume.value=-1.5; engineCycle.value='4t'; }
+        else if (preset === 'shogun_125') { baseBore.value=53.5; stroke.value=55.2; cylCount.value=1; chamberCC.value=12.2; pistonVolume.value=-1.5; engineCycle.value='4t'; }
+        
+        // MATIC ENTRY
+        else if (preset === 'beat_mio') { baseBore.value=50; stroke.value=55.1; cylCount.value=1; chamberCC.value=10.5; pistonVolume.value=-1.5; }
+        else if (preset === 'scoopy') { baseBore.value=50; stroke.value=55.6; cylCount.value=1; chamberCC.value=10.8; pistonVolume.value=-1.5; }
+        else if (preset === 'vario_110') { baseBore.value=50; stroke.value=55.1; cylCount.value=1; chamberCC.value=10.5; pistonVolume.value=-1.5; }
+        else if (preset === 'nex_115') { baseBore.value=51.0; stroke.value=55.2; cylCount.value=1; chamberCC.value=11.0; pistonVolume.value=-1.5; }
+        
+        // MATIC & SPORT 125-150cc
+        else if (preset === 'vario_125') { baseBore.value=52.4; stroke.value=57.9; cylCount.value=1; chamberCC.value=11.5; pistonVolume.value=-2.0; }
+        else if (preset === 'vario_150') { baseBore.value=57.3; stroke.value=57.8; cylCount.value=1; chamberCC.value=12.5; pistonVolume.value=-2.0; }
+        else if (preset === 'pcx_150') { baseBore.value=57.3; stroke.value=57.9; cylCount.value=1; chamberCC.value=13.0; pistonVolume.value=-2.0; }
+        else if (preset === 'nmax_155') { baseBore.value=58.0; stroke.value=58.7; cylCount.value=1; chamberCC.value=11.0; pistonVolume.value=-2.5; }
+        else if (preset === 'aerox_155') { baseBore.value=58.0; stroke.value=58.7; cylCount.value=1; chamberCC.value=11.0; pistonVolume.value=-2.5; }
+        else if (preset === 'cb150r') { baseBore.value=57.3; stroke.value=57.8; cylCount.value=1; chamberCC.value=11.5; pistonVolume.value=-2.0; }
+        else if (preset === 'r15_v4') { baseBore.value=58.0; stroke.value=58.7; cylCount.value=1; chamberCC.value=11.0; pistonVolume.value=-2.5; }
+        else if (preset === 'gsx_r150') { baseBore.value=62.0; stroke.value=48.8; cylCount.value=1; chamberCC.value=12.0; pistonVolume.value=-2.0; }
+        
+        // NAKED & SPORT 155-250cc
+        else if (preset === 'mt15') { baseBore.value=58.0; stroke.value=58.7; cylCount.value=1; chamberCC.value=11.0; pistonVolume.value=-2.5; }
+        else if (preset === 'cbr150r') { baseBore.value=57.3; stroke.value=57.8; cylCount.value=1; chamberCC.value=11.5; pistonVolume.value=-2.0; }
+        else if (preset === 'cb150x') { baseBore.value=57.3; stroke.value=57.8; cylCount.value=1; chamberCC.value=11.5; pistonVolume.value=-2.0; }
+        else if (preset === 'cbr250rr') { baseBore.value=62.0; stroke.value=41.4; cylCount.value=2; chamberCC.value=8.0; pistonVolume.value=-2.5; }
+        else if (preset === 'ninja_250') { baseBore.value=62.0; stroke.value=41.2; cylCount.value=2; chamberCC.value=11.0; pistonVolume.value=-2.0; }
+        else if (preset === 'z250') { baseBore.value=62.0; stroke.value=41.2; cylCount.value=2; chamberCC.value=11.0; pistonVolume.value=-2.0; }
+        
+        // MOGE & TOURING 250cc+
+        else if (preset === 'mt25') { baseBore.value=60.0; stroke.value=44.1; cylCount.value=2; chamberCC.value=9.5; pistonVolume.value=-2.0; }
+        else if (preset === 'versys_250') { baseBore.value=70.0; stroke.value=64.9; cylCount.value=2; chamberCC.value=18.0; pistonVolume.value=-3.0; }
+        else if (preset === 'crf250l') { baseBore.value=76.0; stroke.value=55.0; cylCount.value=1; chamberCC.value=16.0; pistonVolume.value=-2.0; }
+        else if (preset === 'klx250') { baseBore.value=72.0; stroke.value=61.2; cylCount.value=1; chamberCC.value=14.0; pistonVolume.value=-2.0; }
+        
+        // MOBIL
+        else if (preset === 'avanza') { baseBore.value=72.5; stroke.value=90.6; cylCount.value=4; chamberCC.value=28.0; pistonVolume.value=-3.0; engineType.value='car'; }
+        else if (preset === 'brio') { baseBore.value=73.0; stroke.value=71.6; cylCount.value=4; chamberCC.value=25.0; pistonVolume.value=-2.5; engineType.value='car'; }
+        else if (preset === 'turbo_car') { baseBore.value=73.0; stroke.value=89.4; cylCount.value=4; chamberCC.value=30.0; pistonVolume.value=-2.0; induction.value='Turbo'; boostPsi.value=12; engineType.value='car'; }
+        
+        if (preset !== 'standard_zero') {
+          valveIn.value = baseBore.value * 0.5;
+          valveOut.value = baseBore.value * 0.45;
+          gearRatio.value = engineType.value==='car' ? 3.5 : 3.0;
+          ignitionTiming.value = engineCycle.value==='2t' ? 18 : (compressionRatio.value > 11 ? 12 : 15);
+        }
+        oversize.value = 0;
+        effectiveBore.value = baseBore.value;
+      };
+
+      const renderChart = () => {
+        const ctx = document.getElementById('hpChart')?.getContext('2d');
+        if(!ctx) return;
+        const maxRPM = fuelType.value === 'diesel' ? 4500 : 8000;
+        const rpmPointsAdj = fuelType.value === 'diesel' 
+          ? [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500]
+          : rpmPoints;
+        
+        const naData = rpmPointsAdj.map(rpm => (displacementCC.value * rpm * (veNA.value/100)) / 5252 * 0.9 * (fuelType.value === 'diesel' ? 0.85 : 1.0));
+        const turboData = rpmPointsAdj.map(rpm => (displacementCC.value * rpm * (veTurbo.value/100)) / 5252 * 0.95 * (fuelType.value === 'diesel' ? 0.85 : 1.0));
+        if(chartInstance) chartInstance.destroy();
+        chartInstance = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: rpmPointsAdj.map(r=>r/1000+'k'),
+            datasets: [
+              { label: 'NA HP', data: naData, borderColor: '#3b82f6', tension: 0.3, fill: false },
+              { label: 'Turbo HP', data: turboData, borderColor: '#a855f7', tension: 0.3, borderDash: [5,3] }
+            ]
+          },
+          options: { responsive: true, maintainAspectRatio: true }
+        });
+      };
+
+      const toggleDarkMode = () => { isDark.value = !isDark.value; localStorage.setItem('darkMode', isDark.value); };
+      const toggleUnit = () => unit.value = unit.value==='mm'?'inch':'mm';
+      
+      const saveToStorage = () => {
+        const state = { baseBore: baseBore.value, stroke: stroke.value, cylCount: cylCount.value, chamberCC: chamberCC.value, oversize: oversize.value, gearRatio: gearRatio.value, valveIn: valveIn.value, valveOut: valveOut.value, ignitionTiming: ignitionTiming.value, engineCycle: engineCycle.value, fuelType: fuelType.value };
+        localStorage.setItem('engineState', JSON.stringify(state));
+        alert('Saved to localStorage');
+      };
+      const exportJSON = () => {
+        const data = { compressionRatio: compressionRatio.value.toFixed(2), swept: sweptVolume.value, hp: estimatedHP.value, fuel: fuelType.value, octane: fuelType.value === 'diesel' ? cetaneRecommendation.value : octaneRecommendation.value.ron, gear: gearRatio.value, valveIn: valveIn.value, valveOut: valveOut.value, timing: ignitionTiming.value };
+        const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'engine.json'; a.click();
+      };
+      const resetToDefault = () => { 
+        if (fuelType.value === 'diesel') {
+          baseBore.value=93; stroke.value=102; cylCount.value=4; chamberCC.value=35; oversize.value=0; 
+          pistonVolume.value=5; engineCycle.value='4t'; engineType.value='car';
+        } else {
+          baseBore.value=50; stroke.value=55.1; cylCount.value=1; chamberCC.value=10.5; oversize.value=0; 
+          pistonVolume.value=-1.5; engineCycle.value='4t'; engineType.value='motorcycle';
+        }
+        valveIn.value=baseBore.value*0.45; valveOut.value=baseBore.value*0.4; gearRatio.value=3.2; ignitionTiming.value=12; 
+        effectiveBore.value = baseBore.value;
+      };
+
+      watch([displacementCC, induction, boostPsi, veNA, veTurbo, engineCycle, fuelType], () => nextTick(renderChart));
+      watch([baseBore, oversize], () => { effectiveBore.value = baseBore.value + oversize.value; });
+      
+      onMounted(() => {
+        const savedDark = localStorage.getItem('darkMode');
+        if (savedDark === 'true') isDark.value = true;
+        
+        const saved = localStorage.getItem('engineState');
+        if(saved) {
+          try { 
+            const s = JSON.parse(saved);
+            baseBore.value = s.baseBore || 50;
+            stroke.value = s.stroke || 55.1;
+            cylCount.value = s.cylCount || 1;
+            chamberCC.value = s.chamberCC || 10.5;
+            oversize.value = s.oversize || 0;
+            gearRatio.value = s.gearRatio || 3.2;
+            valveIn.value = s.valveIn || 25;
+            valveOut.value = s.valveOut || 22;
+            ignitionTiming.value = s.ignitionTiming || 12;
+            engineCycle.value = s.engineCycle || '4t';
+            if (s.fuelType) fuelType.value = s.fuelType;
+            effectiveBore.value = baseBore.value + oversize.value;
+            
+            // Jika fuel type diesel, trigger handler
+            if (fuelType.value === 'diesel') {
+              onFuelTypeChange();
+            }
+          } catch(e){}
+        } else {
+          applyPreset();
+        }
+        nextTick(renderChart);
+      });
+
+      return {
+        isDark, engineType, fuelType, engineCycle, induction, 
+        baseBore, effectiveBore, stroke, cylCount, chamberCC, gasketThick, gasketBore,
+        pistonVolume, oversize, boostPsi, selectedPreset, unit,
+        valveIn, valveOut, gearRatio, ignitionTiming,
+        sweptPerCyl, sweptVolume, gasketVolume, clearanceVolume,
+        compressionRatio, crSafety, afrRecommendation, afrIndicator, octaneRecommendation, cetaneRecommendation,
+        estimatedHP, naPeakHP, turboPeakHP, veNA, veTurbo, displacementCC,
+        oversizeEffect, smartInsight,
+        showCRRecommendation, crRecommendationText, targetCR, applyCRRecommendation,
+        applyPreset, toggleUnit, saveToStorage, exportJSON, resetToDefault, toggleDarkMode,
+        syncBoreFromBase, applyOversize,
+        setEngineType, onFuelTypeChange
+      };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
